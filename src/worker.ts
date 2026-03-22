@@ -9,6 +9,7 @@ import { config } from "./config.js";
 import { fetchNextPending, markProcessing, markSent, markFailed, recoverStaleProcessing } from "./supabase.js";
 import { checkXurl, postReply, postTweet } from "./xurl.js";
 import { buildReplyText, buildBatchText } from "./templates.js";
+import { fetchLatestTweet } from "./x-lookup.js";
 import type { QueueEntry } from "./supabase.js";
 
 let running = true;
@@ -54,13 +55,26 @@ export async function processEntry(entry: QueueEntry): Promise<void> {
 
   await markProcessing(entry.id);
 
+  // If no reply_to_tweet_id, look up the recipient's latest tweet
+  let replyToTweetId = entry.reply_to_tweet_id;
+  if (!replyToTweetId) {
+    log("info", `No tweet ID — looking up latest tweet for @${entry.recipient_handle}`);
+    const latest = await fetchLatestTweet(entry.recipient_handle);
+    if (latest) {
+      replyToTweetId = latest.id;
+      log("info", `Found latest tweet: "${latest.text.slice(0, 50)}..." (${latest.id})`);
+    } else {
+      log("warn", `Could not find tweets for @${entry.recipient_handle} — posting standalone`);
+    }
+  }
+
   let result;
   let text: string;
 
-  if (entry.reply_to_tweet_id) {
+  if (replyToTweetId) {
     text = buildReplyText(entry);
-    log("info", `Posting reply to tweet ${entry.reply_to_tweet_id}`, { text });
-    result = await postReply(entry.reply_to_tweet_id, text);
+    log("info", `Posting reply to tweet ${replyToTweetId}`, { text });
+    result = await postReply(replyToTweetId, text);
   } else {
     text = buildBatchText([entry]);
     log("info", `Posting standalone tweet`, { text });
