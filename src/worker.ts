@@ -6,7 +6,7 @@
  */
 
 import { config } from "./config.js";
-import { fetchNextPending, markProcessing, markSent, markFailed } from "./supabase.js";
+import { fetchNextPending, markProcessing, markSent, markFailed, recoverStaleProcessing } from "./supabase.js";
 import { checkXurl, postReply, postTweet } from "./xurl.js";
 import { buildReplyText, buildBatchText } from "./templates.js";
 import type { QueueEntry } from "./supabase.js";
@@ -102,6 +102,12 @@ export async function pollOnce(): Promise<void> {
   }
 
   try {
+    // Recover entries stuck in 'processing' (e.g. from a crash)
+    const recovered = await recoverStaleProcessing();
+    if (recovered > 0) {
+      log("warn", `Recovered ${recovered} stale processing entries`);
+    }
+
     const entry = await fetchNextPending();
     if (!entry) return;
     await processEntry(entry);

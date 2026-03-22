@@ -20,6 +20,27 @@ export interface QueueEntry {
   updated_at: string;
 }
 
+const STALE_PROCESSING_MINUTES = 10;
+
+/** Reset entries stuck in 'processing' for too long back to 'pending'. */
+export async function recoverStaleProcessing(): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("tweet_notification_queue")
+    .update({ status: "pending", updated_at: new Date().toISOString() })
+    .eq("status", "processing")
+    .lt("updated_at", cutoff)
+    .select("id");
+
+  if (error) {
+    console.warn("[supabase] Failed to recover stale processing entries:", error);
+    return 0;
+  }
+
+  return data?.length ?? 0;
+}
+
 /** Fetch the next pending entry (replies first, then standalones). */
 export async function fetchNextPending(): Promise<QueueEntry | null> {
   const now = new Date().toISOString();
