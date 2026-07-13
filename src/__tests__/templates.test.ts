@@ -33,14 +33,23 @@ describe("buildReplyText", () => {
     expect(text).toContain("Someone tipped @alice");
   });
 
-  it("includes tx link when tx_hash is present", () => {
+  it("links EVM tx hashes to basescan", () => {
     const text = buildReplyText(makeEntry({ tx_hash: "0xdeadbeef" }));
     expect(text).toContain("https://basescan.org/tx/0xdeadbeef");
+  });
+
+  it("links Solana signatures to solscan", () => {
+    const sig =
+      "5FMxQVNMAx1Lbq9ibc6dMbqLem1CFGC1CkiUwHd15utezNcemYbBaBK3s6KY5ofWNJCMnp2rgpX4Sq5JWSGq4Yh9";
+    const text = buildReplyText(makeEntry({ tx_hash: sig }));
+    expect(text).toContain(`https://solscan.io/tx/${sig}`);
+    expect(text).not.toContain("basescan.org");
   });
 
   it("omits tx link when no tx_hash", () => {
     const text = buildReplyText(makeEntry({ tx_hash: null }));
     expect(text).not.toContain("basescan.org");
+    expect(text).not.toContain("solscan.io");
   });
 
   it("formats amount to 2 decimal places", () => {
